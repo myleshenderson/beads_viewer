@@ -70,6 +70,7 @@ const (
 	focusTutorial    // Interactive tutorial (bv-8y31)
 	focusCassModal   // Cass session preview modal (bv-5bqh)
 	focusUpdateModal // Self-update modal (bv-182)
+	focusPRStatus    // PR status view
 )
 
 // SortMode represents the current list sorting mode (bv-3ita)
@@ -458,6 +459,7 @@ type Model struct {
 	tree               TreeModel // Hierarchical tree view (bv-gllx)
 	insightsPanel      InsightsModel
 	flowMatrix         FlowMatrixModel // Cross-label flow matrix
+	prStatus           PRStatusModel   // PR status view
 	theme              Theme
 	keyRegistry        *KeyRegistry // Centralized key dispatch (bv-3bsx)
 
@@ -3044,6 +3046,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focused = focusList
 					return m, nil
 				}
+				if m.focused == focusPRStatus {
+					m.focused = focusList
+					return m, nil
+				}
 				if m.isGraphView {
 					m.isGraphView = false
 					m.focused = focusList
@@ -3099,6 +3105,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.flowMatrix.showDrilldown = false
 						return m, nil
 					}
+					m.focused = focusList
+					return m, nil
+				}
+				if m.focused == focusPRStatus {
 					m.focused = focusList
 					return m, nil
 				}
@@ -3366,6 +3376,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					viewToggleHandled = true
 				}
 
+			case focusPRStatus:
+				m = m.handlePRStatusKeys(msg)
+				return m, nil
+
 			case focusDetail:
 				// Intercept "O" in detail view for editor dispatch (bv-134)
 				if keyStr == "O" {
@@ -3577,6 +3591,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					panelHeight = 3
 				}
 				m.flowMatrix.SetSize(m.width, panelHeight)
+				return m, nil
+
+			case "z":
+				// PR status view
+				m.clearAttentionOverlay()
+				m.isGraphView = false
+				m.isBoardView = false
+				m.isActionableView = false
+				m.isHistoryView = false
+				m.focused = focusPRStatus
+				m.prStatus = NewPRStatusModel(m.theme)
+				m.prStatus.SetData(m.issues)
+				panelHeight := m.height - 2
+				if panelHeight < 3 {
+					panelHeight = 3
+				}
+				m.prStatus.SetSize(m.width, panelHeight)
 				return m, nil
 
 			case "!":
@@ -4523,6 +4554,18 @@ func (m Model) handleFlowMatrixKeys(msg tea.KeyMsg) Model {
 	return m
 }
 
+func (m Model) handlePRStatusKeys(msg tea.KeyMsg) Model {
+	switch msg.String() {
+	case "z", "q", "esc":
+		m.focused = focusList
+	case "j", "down":
+		m.prStatus.MoveDown()
+	case "k", "up":
+		m.prStatus.MoveUp()
+	}
+	return m
+}
+
 // handleRecipePickerKeys handles keyboard input when recipe picker is focused
 func (m Model) handleRecipePickerKeys(msg tea.KeyMsg) Model {
 	switch msg.String() {
@@ -4958,6 +5001,9 @@ func (m Model) View() string {
 	} else if m.focused == focusFlowMatrix {
 		m.flowMatrix.SetSize(m.width, m.height-1)
 		body = m.flowMatrix.View()
+	} else if m.focused == focusPRStatus {
+		m.prStatus.SetSize(m.width, m.height-1)
+		body = m.prStatus.View()
 	} else if m.focused == focusTree {
 		// Hierarchical tree view (bv-gllx)
 		m.tree.SetSize(m.width, m.height-1)
@@ -7934,6 +7980,8 @@ func (f focus) String() string {
 		return "cass_modal"
 	case focusUpdateModal:
 		return "update_modal"
+	case focusPRStatus:
+		return "pr_status"
 	default:
 		return "unknown"
 	}

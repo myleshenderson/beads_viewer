@@ -545,6 +545,30 @@ func TestFocusStateString(t *testing.T) {
 	}
 }
 
+// TestFocusPRStatus_EnterAndExit verifies 'z' enters PR status view and esc/q exit it
+func TestFocusPRStatus_EnterAndExit(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
+	}
+	m := ui.NewModel(issues, nil, "")
+
+	// Press 'z' to enter PR status view
+	newM, _ := m.Update(keyMsg("z"))
+	m = newM.(ui.Model)
+
+	if got := m.FocusState(); got != "pr_status" {
+		t.Fatalf("expected focus 'pr_status' after pressing z, got %q", got)
+	}
+
+	// Press 'esc' to exit PR status view
+	newM, _ = m.Update(keyMsg("esc"))
+	m = newM.(ui.Model)
+
+	if got := m.FocusState(); got != "list" {
+		t.Fatalf("expected focus 'list' after esc, got %q", got)
+	}
+}
+
 // Helper to create a KeyMsg
 func keyMsg(key string) tea.KeyMsg {
 	return tea.KeyMsg{
