@@ -4554,6 +4554,18 @@ func (m Model) handleFlowMatrixKeys(msg tea.KeyMsg) Model {
 	return m
 }
 
+// runBdCommand shells out to `bd` for PR-status actions (request review,
+// request CI-fix). It's a package-level var so tests can swap it out without
+// a bigger mocking framework — the repo has no pre-existing exec-stubbing
+// helper for pkg/ui (recon: no os/exec usage in pkg/ui/*_test.go).
+var runBdCommand = func(args ...string) error {
+	if os.Getenv("BV_TEST_MODE") != "" {
+		return nil
+	}
+	cmd := exec.Command("bd", args...)
+	return cmd.Run()
+}
+
 func (m Model) handlePRStatusKeys(msg tea.KeyMsg) Model {
 	switch msg.String() {
 	case "z", "q", "esc":
@@ -4562,6 +4574,20 @@ func (m Model) handlePRStatusKeys(msg tea.KeyMsg) Model {
 		m.prStatus.MoveDown()
 	case "k", "up":
 		m.prStatus.MoveUp()
+	case "enter", "o":
+		if sel := m.prStatus.Selected(); sel != nil {
+			if ref := prExternalRef(*sel); ref != "" {
+				_ = openBrowserURL(ref)
+			}
+		}
+	case "r":
+		if sel := m.prStatus.Selected(); sel != nil {
+			_ = runBdCommand("update", sel.ID, "--add-label", "review-requested", "--json")
+		}
+	case "c":
+		if sel := m.prStatus.Selected(); sel != nil {
+			_ = runBdCommand("update", sel.ID, "--add-label", "ci-fix-requested", "--json")
+		}
 	}
 	return m
 }
@@ -4884,6 +4910,9 @@ func (m Model) restoreFocusFromHelp() focus {
 	}
 	if m.focusBeforeHelp == focusTimeTravelInput {
 		return focusTimeTravelInput
+	}
+	if m.focusBeforeHelp == focusPRStatus {
+		return focusPRStatus
 	}
 	// Default: return to list
 	return focusList
@@ -6458,6 +6487,8 @@ func (m *Model) renderFooter() string {
 		keyHints = append(keyHints, keyStyle.Render("A")+" attention", keyStyle.Render("F")+" flow")
 	} else if m.focused == focusFlowMatrix {
 		keyHints = append(keyHints, keyStyle.Render("j/k")+" nav", keyStyle.Render("tab")+" panel", keyStyle.Render("⏎")+" drill", keyStyle.Render("esc")+" back", keyStyle.Render("f")+" close")
+	} else if m.focused == focusPRStatus {
+		keyHints = append(keyHints, keyStyle.Render("j/k")+" move", keyStyle.Render("⏎/o")+" open PR", keyStyle.Render("r")+" request review", keyStyle.Render("c")+" request CI fix", keyStyle.Render("z/esc")+" back")
 	} else if m.isGraphView {
 		keyHints = append(keyHints, keyStyle.Render("hjkl")+" nav", keyStyle.Render("H/L")+" scroll", keyStyle.Render("⏎")+" view", keyStyle.Render("g")+" list")
 	} else if m.isBoardView {
@@ -7407,7 +7438,7 @@ func (m Model) handleLeftClick(x, y int) Model {
 	if m.focused == focusInsights || m.focused == focusFlowMatrix ||
 		m.focused == focusTree || m.isGraphView || m.isBoardView ||
 		m.isActionableView || m.isHistoryView || m.isSprintView ||
-		m.focused == focusLabelDashboard {
+		m.focused == focusLabelDashboard || m.focused == focusPRStatus {
 		return m
 	}
 
