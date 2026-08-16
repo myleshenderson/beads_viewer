@@ -200,6 +200,25 @@ func TestIssue_Struct(t *testing.T) {
 	}
 }
 
+// bd emits a per-issue "metadata" JSON object (e.g. pr_ci_status,
+// pr_review_comment_count written by pr-monitor). It must decode into
+// Issue.Metadata with JSON-native Go types intact: strings stay strings,
+// numbers decode as float64 (standard encoding/json behavior for
+// map[string]any), not assuming everything stringifies cleanly.
+func TestIssue_UnmarshalJSON_DecodesMetadata(t *testing.T) {
+	line := []byte(`{"id":"app-1","title":"Fix login","metadata":{"pr_ci_status":"passing","pr_review_comment_count":3}}`)
+	var issue Issue
+	if err := json.Unmarshal(line, &issue); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got := issue.Metadata["pr_ci_status"]; got != "passing" {
+		t.Errorf("pr_ci_status = %v, want %q", got, "passing")
+	}
+	if got, ok := issue.Metadata["pr_review_comment_count"].(float64); !ok || got != 3 {
+		t.Errorf("pr_review_comment_count = %v (%T), want float64(3)", issue.Metadata["pr_review_comment_count"], issue.Metadata["pr_review_comment_count"])
+	}
+}
+
 func TestDependency_Struct(t *testing.T) {
 	now := time.Now()
 	dep := &Dependency{
