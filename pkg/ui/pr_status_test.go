@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -101,6 +102,16 @@ func stubExecCommand(record func(name string, args ...string)) func() {
 	return func() { runBdCommand = original }
 }
 
+// stubExecCommandErr swaps runBdCommand for a stub that always fails, so
+// tests can assert the failure-path status message.
+func stubExecCommandErr(err error) func() {
+	original := runBdCommand
+	runBdCommand = func(args ...string) error {
+		return err
+	}
+	return func() { runBdCommand = original }
+}
+
 func TestHandlePRStatusKeys_RequestReview(t *testing.T) {
 	os.Setenv("BV_TEST_MODE", "1")
 	defer os.Unsetenv("BV_TEST_MODE")
@@ -157,9 +168,116 @@ func TestHandlePRStatusKeys_NoOpWhenNoRowSelected(t *testing.T) {
 	restoreExec := stubExecCommand(func(name string, args ...string) { called = true })
 	defer restoreExec()
 
-	m.handlePRStatusKeys(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = m.handlePRStatusKeys(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 
 	if called {
 		t.Fatal("expected no exec call when no row is selected")
+	}
+	if m.statusMsg == "" || !m.statusIsError {
+		t.Fatalf("expected an error status message when nothing is selected, got statusMsg=%q statusIsError=%v", m.statusMsg, m.statusIsError)
+	}
+}
+
+func TestHandlePRStatusKeys_RequestReviewSetsSuccessStatus(t *testing.T) {
+	os.Setenv("BV_TEST_MODE", "1")
+	defer os.Unsetenv("BV_TEST_MODE")
+
+	m := newTestModel()
+	m.prStatus = NewPRStatusModel(m.theme)
+	m.prStatus.SetData([]model.Issue{{ID: "app-1", Title: "Fix login", Metadata: map[string]any{"pr_ci_status": "passing"}}})
+	m.focused = focusPRStatus
+
+	restoreExec := stubExecCommand(func(name string, args ...string) {})
+	defer restoreExec()
+
+	m = m.handlePRStatusKeys(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+
+	if m.statusIsError {
+		t.Fatalf("expected success status, got error: %q", m.statusMsg)
+	}
+	if !strings.Contains(m.statusMsg, "app-1") {
+		t.Errorf("expected status message to mention app-1, got %q", m.statusMsg)
+	}
+}
+
+func TestHandlePRStatusKeys_RequestReviewSetsFailureStatus(t *testing.T) {
+	os.Setenv("BV_TEST_MODE", "1")
+	defer os.Unsetenv("BV_TEST_MODE")
+
+	m := newTestModel()
+	m.prStatus = NewPRStatusModel(m.theme)
+	m.prStatus.SetData([]model.Issue{{ID: "app-1", Title: "Fix login", Metadata: map[string]any{"pr_ci_status": "passing"}}})
+	m.focused = focusPRStatus
+
+	restoreExec := stubExecCommandErr(fmt.Errorf("bd: command not found"))
+	defer restoreExec()
+
+	m = m.handlePRStatusKeys(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+
+	if !m.statusIsError {
+		t.Fatalf("expected error status, got success: %q", m.statusMsg)
+	}
+	if !strings.Contains(m.statusMsg, "app-1") || !strings.Contains(m.statusMsg, "command not found") {
+		t.Errorf("expected status message to mention app-1 and the underlying error, got %q", m.statusMsg)
+	}
+}
+
+func TestHandlePRStatusKeys_RequestCIFixSetsFailureStatus(t *testing.T) {
+	os.Setenv("BV_TEST_MODE", "1")
+	defer os.Unsetenv("BV_TEST_MODE")
+
+	m := newTestModel()
+	m.prStatus = NewPRStatusModel(m.theme)
+	m.prStatus.SetData([]model.Issue{{ID: "app-1", Title: "Fix login", Metadata: map[string]any{"pr_ci_status": "failing"}}})
+	m.focused = focusPRStatus
+
+	restoreExec := stubExecCommandErr(fmt.Errorf("label add failed"))
+	defer restoreExec()
+
+	m = m.handlePRStatusKeys(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+
+	if !m.statusIsError {
+		t.Fatalf("expected error status, got success: %q", m.statusMsg)
+	}
+	if !strings.Contains(m.statusMsg, "app-1") {
+		t.Errorf("expected status message to mention app-1, got %q", m.statusMsg)
+	}
+}
+
+func TestHandlePRStatusKeys_OpenSetsStatusForMissingURL(t *testing.T) {
+	os.Setenv("BV_TEST_MODE", "1")
+	defer os.Unsetenv("BV_TEST_MODE")
+
+	m := newTestModel()
+	m.prStatus = NewPRStatusModel(m.theme)
+	m.prStatus.SetData([]model.Issue{{ID: "app-1", Title: "No PR yet", Metadata: map[string]any{"pr_ci_status": "pending"}}}) // no ExternalRef
+	m.focused = focusPRStatus
+
+	m = m.handlePRStatusKeys(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
+
+	if !m.statusIsError {
+		t.Fatalf("expected error status when no PR URL is set, got success: %q", m.statusMsg)
+	}
+	if !strings.Contains(m.statusMsg, "app-1") {
+		t.Errorf("expected status message to mention app-1, got %q", m.statusMsg)
+	}
+}
+
+func TestHandlePRStatusKeys_OpenSetsSuccessStatus(t *testing.T) {
+	os.Setenv("BV_TEST_MODE", "1")
+	defer os.Unsetenv("BV_TEST_MODE")
+
+	m := newTestModel()
+	m.prStatus = NewPRStatusModel(m.theme)
+	m.prStatus.SetData([]model.Issue{{ID: "app-1", Title: "Fix login", Metadata: map[string]any{"pr_ci_status": "passing"}, ExternalRef: stringPtr("https://github.com/acme/app/pull/1")}})
+	m.focused = focusPRStatus
+
+	m = m.handlePRStatusKeys(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
+
+	if m.statusIsError {
+		t.Fatalf("expected success status, got error: %q", m.statusMsg)
+	}
+	if !strings.Contains(m.statusMsg, "app-1") {
+		t.Errorf("expected status message to mention app-1, got %q", m.statusMsg)
 	}
 }

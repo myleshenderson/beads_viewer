@@ -3719,6 +3719,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.historyView.MoveUp()
 			case focusFlowMatrix:
 				m.flowMatrix.MoveUp()
+			case focusPRStatus:
+				m.prStatus.MoveUp()
 			}
 			return m, nil
 		case tea.MouseButtonWheelDown:
@@ -3748,6 +3750,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.historyView.MoveDown()
 			case focusFlowMatrix:
 				m.flowMatrix.MoveDown()
+			case focusPRStatus:
+				m.prStatus.MoveDown()
 			}
 			return m, nil
 
@@ -4563,7 +4567,11 @@ var runBdCommand = func(args ...string) error {
 		return nil
 	}
 	cmd := exec.Command("bd", args...)
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%v — %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 func (m Model) handlePRStatusKeys(msg tea.KeyMsg) Model {
@@ -4577,16 +4585,46 @@ func (m Model) handlePRStatusKeys(msg tea.KeyMsg) Model {
 	case "enter", "o":
 		if sel := m.prStatus.Selected(); sel != nil {
 			if ref := prExternalRef(*sel); ref != "" {
-				_ = openBrowserURL(ref)
+				if err := openBrowserURL(ref); err != nil {
+					m.statusMsg = fmt.Sprintf("❌ Could not open browser: %v", err)
+					m.statusIsError = true
+				} else {
+					m.statusMsg = fmt.Sprintf("🌐 Opened %s in browser", sel.ID)
+					m.statusIsError = false
+				}
+			} else {
+				m.statusMsg = fmt.Sprintf("❌ No PR URL for %s", sel.ID)
+				m.statusIsError = true
 			}
+		} else {
+			m.statusMsg = "❌ No issue selected"
+			m.statusIsError = true
 		}
 	case "r":
 		if sel := m.prStatus.Selected(); sel != nil {
-			_ = runBdCommand("update", sel.ID, "--add-label", "review-requested", "--json")
+			if err := runBdCommand("update", sel.ID, "--add-label", "review-requested", "--json"); err != nil {
+				m.statusMsg = fmt.Sprintf("❌ Request review failed for %s: %v", sel.ID, err)
+				m.statusIsError = true
+			} else {
+				m.statusMsg = fmt.Sprintf("✅ Requested review for %s", sel.ID)
+				m.statusIsError = false
+			}
+		} else {
+			m.statusMsg = "❌ No issue selected"
+			m.statusIsError = true
 		}
 	case "c":
 		if sel := m.prStatus.Selected(); sel != nil {
-			_ = runBdCommand("update", sel.ID, "--add-label", "ci-fix-requested", "--json")
+			if err := runBdCommand("update", sel.ID, "--add-label", "ci-fix-requested", "--json"); err != nil {
+				m.statusMsg = fmt.Sprintf("❌ Request CI fix failed for %s: %v", sel.ID, err)
+				m.statusIsError = true
+			} else {
+				m.statusMsg = fmt.Sprintf("✅ Requested CI fix for %s", sel.ID)
+				m.statusIsError = false
+			}
+		} else {
+			m.statusMsg = "❌ No issue selected"
+			m.statusIsError = true
 		}
 	}
 	return m
@@ -5401,6 +5439,7 @@ func (m *Model) renderHelpOverlay() string {
 		{"f", "Flow matrix"},
 		{"[", "Label dashboard"},
 		{"]", "Attention view"},
+		{"z", "PR status"},
 	}
 
 	globalSection := []struct{ key, desc string }{

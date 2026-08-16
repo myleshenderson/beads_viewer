@@ -135,13 +135,27 @@ func (m PRStatusModel) View() string {
 		case "pending":
 			ciColor = m.theme.Task
 		}
-		ciStyle := m.theme.Renderer.NewStyle().Foreground(ciColor)
 
-		line := fmt.Sprintf("%s%s  %s  [%s]  comments:%s  %s",
-			cursor, row.issue.ID, row.issue.Title, ciStyle.Render(ci), reviewCount, ref)
+		// base carries the row's background (when selected) so that every
+		// segment of the line — including the differently-colored
+		// CI-status word — shares it. Rendering ciStyle as a fully closed
+		// sub-string and concatenating it into a plain fmt.Sprintf would
+		// emit a bare SGR reset (\x1b[0m) that clobbers the outer
+		// background partway through the line; deriving ciStyle from base
+		// instead means its own Render call re-applies the background
+		// after the reset.
+		base := m.theme.Renderer.NewStyle()
+		if i == m.cursor {
+			base = base.Background(m.theme.Highlight)
+		}
+		ciStyle := base.Foreground(ciColor)
+
+		line := base.Render(fmt.Sprintf("%s%s  %s  [", cursor, row.issue.ID, row.issue.Title)) +
+			ciStyle.Render(ci) +
+			base.Render(fmt.Sprintf("]  comments:%s  %s", reviewCount, ref))
 
 		if i == m.cursor {
-			line = m.theme.Renderer.NewStyle().Background(m.theme.Highlight).Render(line)
+			line = base.Width(m.width).Render(line)
 		}
 
 		b.WriteString(line)
