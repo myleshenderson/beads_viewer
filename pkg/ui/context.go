@@ -32,6 +32,7 @@ const (
 	ContextSprint         Context = "sprint"
 	ContextLabelDashboard Context = "label-dashboard"
 	ContextAttention      Context = "attention"
+	ContextPRStatus       Context = "pr-status"
 
 	// Detail states
 	ContextSplit      Context = "split"
@@ -127,6 +128,11 @@ func (m Model) CurrentContext() Context {
 		return ContextFlowMatrix
 	}
 
+	// PR status view
+	if m.focused == focusPRStatus {
+		return ContextPRStatus
+	}
+
 	// Label dashboard
 	if m.focused == focusLabelDashboard {
 		return ContextLabelDashboard
@@ -210,6 +216,7 @@ func (c Context) Description() string {
 		ContextSprint:             "Sprint view",
 		ContextLabelDashboard:     "Label dashboard",
 		ContextAttention:          "Attention view",
+		ContextPRStatus:           "PR status view",
 		ContextSplit:              "Split view",
 		ContextDetail:             "Issue detail",
 		ContextTimeTravel:         "Time-travel mode",
@@ -239,7 +246,7 @@ func (c Context) IsView() bool {
 	switch c {
 	case ContextInsights, ContextFlowMatrix, ContextGraph, ContextBoard,
 		ContextActionable, ContextHistory, ContextSprint, ContextLabelDashboard,
-		ContextAttention, ContextSplit, ContextDetail, ContextTimeTravel:
+		ContextAttention, ContextPRStatus, ContextSplit, ContextDetail, ContextTimeTravel:
 		return true
 	}
 	return false

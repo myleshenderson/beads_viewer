@@ -856,3 +856,34 @@ func TestKeyDispatch_ViewToggleTable(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// PR Status View Documentation Tests (bv-pr-status-view Task 5)
+// =============================================================================
+
+func TestKeyBindingDocs_IncludePRStatusView(t *testing.T) {
+	docs := GetKeyBindingDocs()
+	found := false
+	for _, d := range docs {
+		if d.Key == "z" && d.Category == "Views" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected a 'z' binding documented under the Views category")
+	}
+}
+
+func TestFocusesForBindingDoc_PRStatusContext(t *testing.T) {
+	doc := KeyBindingDoc{Key: "j/k", Desc: "Move", Category: "Navigation", Context: "pr_status"}
+	focuses := focusesForBindingDoc(doc)
+	found := false
+	for _, f := range focuses {
+		if f == focusPRStatus {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected context 'pr_status' to map to focusPRStatus")
+	}
+}

@@ -251,6 +251,8 @@ func focusesForBindingDoc(doc KeyBindingDoc) []focus {
 			addFocus(focusFlowMatrix)
 		case "sprint":
 			addFocus(focusSprint)
+		case "pr_status":
+			addFocus(focusPRStatus)
 		}
 	}
 
@@ -270,6 +272,7 @@ func allDocumentedFocuses() []focus {
 		focusTree,
 		focusFlowMatrix,
 		focusSprint,
+		focusPRStatus,
 	}
 }
 
@@ -304,6 +307,7 @@ func GetKeyBindingDocs() []KeyBindingDoc {
 		{"g", "Graph view", "Views", "list,detail"},
 		{"h", "History view", "Views", "list,detail"},
 		{"i", "Insights panel", "Views", "list,detail"},
+		{"z", "PR status", "Views", "list,detail"},
 		{"?", "Help overlay", "Views", "all"},
 		{";", "Shortcuts sidebar", "Views", "all"},
 		{"p", "Priority hints", "Views", "list,detail"},
@@ -353,5 +357,12 @@ func GetKeyBindingDocs() []KeyBindingDoc {
 		{"J", "Detail scroll down", "History", "history"},
 		{"K", "Detail scroll up", "History", "history"},
 		{"o", "Open in browser", "History", "history"},
+
+		// PR Status View
+		{"j/k", "Move", "Navigation", "pr_status"},
+		{"enter/o", "Open PR in browser", "Actions", "pr_status"},
+		{"r", "Request review agent", "Actions", "pr_status"},
+		{"c", "Request CI-fix agent", "Actions", "pr_status"},
+		{"z/esc", "Back to list", "Views", "pr_status"},
 	}
 }
